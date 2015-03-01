@@ -1,24 +1,26 @@
 package tw.fatminmin.xposed.minminhide;
 
 
-import android.app.Activity;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.ResolveInfo;
 import android.os.Binder;
-import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-public class Main implements IXposedHookLoadPackage {
+public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
 
+    public static final String MY_PACKAGE_NAME = Main.class.getPackage().getName();
+    public static XSharedPreferences pref;
 
     final static String PMS = "com.android.server.pm.PackageManagerService";
 
@@ -28,6 +30,11 @@ public class Main implements IXposedHookLoadPackage {
         String packageName = (String) XposedHelpers.callMethod(obj, "getNameForUid", uid);
 
         return packageName;
+    }
+
+    @Override
+    public void initZygote(StartupParam startupParam) throws Throwable {
+        pref = new XSharedPreferences(MY_PACKAGE_NAME);
     }
 
     @Override
@@ -44,8 +51,10 @@ public class Main implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     super.afterHookedMethod(param);
 
-                    if(getCallingName(param.thisObject).equals("tw.fatminmin.xposed.minminguard"))
+                    if(getCallingName(param.thisObject).equals(MY_PACKAGE_NAME))
                         return;
+
+                    pref.reload();
 
                     // android.content.pm.ParceledListSlice
                     Object pList = param.getResult();
@@ -57,7 +66,7 @@ public class Main implements IXposedHookLoadPackage {
 
                     for (ApplicationInfo info : mList)
                     {
-                        if (!info.packageName.equals("com.fc2.fc2video_ad"))
+                        if (!pref.getBoolean(info.packageName, false))
                         {
                             result.add(info);
                         }
@@ -72,8 +81,10 @@ public class Main implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     super.afterHookedMethod(param);
 
-                    if(getCallingName(param.thisObject).equals("tw.fatminmin.xposed.minminguard"))
+                    if(getCallingName(param.thisObject).equals(MY_PACKAGE_NAME))
                         return;
+
+                    pref.reload();
 
                     // android.content.pm.ParceledListSlice
                     Object pList = param.getResult();
@@ -83,7 +94,7 @@ public class Main implements IXposedHookLoadPackage {
 
                     for (PackageInfo info : mList)
                     {
-                        if (!info.packageName.equals("com.fc2.fc2video_ad"))
+                        if (!pref.getBoolean(info.packageName, false))
                         {
                             result.add(info);
                         }
@@ -98,15 +109,17 @@ public class Main implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     super.afterHookedMethod(param);
 
-                    if(getCallingName(param.thisObject).equals("tw.fatminmin.xposed.minminguard"))
+                    if(getCallingName(param.thisObject).equals(MY_PACKAGE_NAME))
                         return;
+
+                    pref.reload();
 
                     List<ResolveInfo> mList = (List<ResolveInfo>) param.getResult();
                     List<ResolveInfo> result = new ArrayList<>();
 
                     for(ResolveInfo info : mList)
                     {
-                        if (!info.activityInfo.packageName.equals("com.fc2.fc2video_ad"))
+                        if (!pref.getBoolean(info.activityInfo.packageName, false))
                         {
                             result.add(info);
                         }
@@ -118,4 +131,6 @@ public class Main implements IXposedHookLoadPackage {
         }
 
     }
+
+
 }
