@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.ResolveInfo;
 import android.os.Binder;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,12 +25,41 @@ public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
 
     final static String PMS = "com.android.server.pm.PackageManagerService";
 
-    private String getCallingName(Object obj)
+    private String getCallingName(Object thiz)
     {
         int uid = Binder.getCallingUid();
-        String packageName = (String) XposedHelpers.callMethod(obj, "getNameForUid", uid);
+        String packageName = (String) XposedHelpers.callMethod(thiz, "getNameForUid", uid);
 
         return packageName;
+    }
+
+    private boolean shouldBlock(Object thiz, String callingName, String queryName)
+    {
+        String key = callingName + ":" + queryName;
+        String key_hide_from_system = queryName + Common.KEY_HIDE_FROM_SYSTEM;
+
+        if(pref.getBoolean(key, false))
+        {
+            return true;
+        }
+        if(pref.getBoolean(key_hide_from_system, false))
+        {
+
+            // block system processes like android.uid.systemui:10015
+            if(callingName.contains(":")) {
+                return true;
+            }
+
+            // public ApplicationInfo getApplicationInfo(String packageName, int flags, int userId)
+            // need to bypass enforceCrossUserPermission
+            ApplicationInfo info = (ApplicationInfo) XposedHelpers.callMethod(thiz, "ApplicationInfo", callingName,
+                    0, Binder.getCallingUid());
+            if((info.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     @Override
@@ -51,9 +81,6 @@ public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     super.afterHookedMethod(param);
 
-                    if(getCallingName(param.thisObject).equals(MY_PACKAGE_NAME))
-                        return;
-
                     pref.reload();
 
                     // android.content.pm.ParceledListSlice
@@ -66,10 +93,11 @@ public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
 
                     for (ApplicationInfo info : mList)
                     {
-                        if (!pref.getBoolean(info.packageName, false))
+                        if (shouldBlock(param.thisObject, getCallingName(param.thisObject), info.packageName))
                         {
-                            result.add(info);
+                            continue;
                         }
+                        result.add(info);
                     }
 
                     XposedHelpers.setObjectField(pList, "mList", result);
@@ -81,9 +109,6 @@ public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     super.afterHookedMethod(param);
 
-                    if(getCallingName(param.thisObject).equals(MY_PACKAGE_NAME))
-                        return;
-
                     pref.reload();
 
                     // android.content.pm.ParceledListSlice
@@ -94,10 +119,11 @@ public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
 
                     for (PackageInfo info : mList)
                     {
-                        if (!pref.getBoolean(info.packageName, false))
+                        if (shouldBlock(param.thisObject, getCallingName(param.thisObject), info.packageName))
                         {
-                            result.add(info);
+                            continue;
                         }
+                        result.add(info);
                     }
 
                     XposedHelpers.setObjectField(pList, "mList", result);
@@ -109,8 +135,29 @@ public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     super.afterHookedMethod(param);
 
-                    if(getCallingName(param.thisObject).equals(MY_PACKAGE_NAME))
-                        return;
+                    pref.reload();
+
+                    List<ResolveInfo> mList = (List<ResolveInfo>) param.getResult();
+                    List<ResolveInfo> result = new ArrayList<>();
+
+                    for(ResolveInfo info : mList)
+                    {
+                        if (shouldBlock(param.thisObject, getCallingName(param.thisObject), info.activityInfo.packageName))
+                        {
+                            continue;
+                        }
+                        result.add(info);
+
+                    }
+
+                    param.setResult(result);
+                }
+            });
+
+            XposedBridge.hookAllMethods(clsPMS, "queryIntentActivityOptions", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    super.afterHookedMethod(param);
 
                     pref.reload();
 
@@ -119,10 +166,12 @@ public class Main implements IXposedHookZygoteInit, IXposedHookLoadPackage {
 
                     for(ResolveInfo info : mList)
                     {
-                        if (!pref.getBoolean(info.activityInfo.packageName, false))
+                        if (shouldBlock(param.thisObject, getCallingName(param.thisObject), info.activityInfo.packageName))
                         {
-                            result.add(info);
+                            continue;
                         }
+                        result.add(info);
+
                     }
 
                     param.setResult(result);

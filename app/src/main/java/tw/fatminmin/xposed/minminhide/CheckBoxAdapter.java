@@ -1,9 +1,6 @@
 package tw.fatminmin.xposed.minminhide;
 
-import android.app.Activity;
-import android.app.ActivityManager;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.drawable.Drawable;
 import android.preference.PreferenceManager;
@@ -25,12 +22,14 @@ public class CheckBoxAdapter extends BaseAdapter {
 	private Context mContext;
 	private LayoutInflater mInflater;
 	private SharedPreferences pref;
+    private String currentPkgName;
 	
-	public CheckBoxAdapter(Context context, List<Map<String, Object>> itemList) {
+	public CheckBoxAdapter(Context context, List<Map<String, Object>> itemList, String pkgName) {
 		mContext = context;
 		mInflater = LayoutInflater.from(context);
 		mItemList = itemList;
 		pref = PreferenceManager.getDefaultSharedPreferences(mContext);
+        currentPkgName = pkgName;
 	}
 	
 	@Override
@@ -62,25 +61,18 @@ public class CheckBoxAdapter extends BaseAdapter {
 		final String sTitle = (String) mItemList.get(position).get("title");
 		final String key = (String) mItemList.get(position).get("key");
 		final Drawable dIcon = (Drawable) mItemList.get(position).get("icon");
+
+        final String pref_key = key + ":" + currentPkgName;
 		
 		title.setText(sTitle);
 		icon.setImageDrawable(dIcon);
 		
-		if(pref.getBoolean(key, false)) {
+		if(pref.getBoolean(pref_key, false)) {
 		    checkBox.setChecked(true);
 		}
 		else {
 		    checkBox.setChecked(false);
 		}
-		
-		icon.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent it = mContext.getPackageManager().getLaunchIntentForPackage(key);
-                it.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                mContext.startActivity(it);
-            }
-        });
 
 		
 		checkBox.setOnClickListener(new View.OnClickListener() {
@@ -91,7 +83,7 @@ public class CheckBoxAdapter extends BaseAdapter {
                 
                 boolean value = cb.isChecked();
                 pref.edit()
-                    .putBoolean(key, value)
+                    .putBoolean(pref_key, value)
                     .commit();
             }
 		});

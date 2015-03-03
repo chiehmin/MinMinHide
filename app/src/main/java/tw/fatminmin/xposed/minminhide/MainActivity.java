@@ -2,6 +2,7 @@ package tw.fatminmin.xposed.minminhide;
 
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningAppProcessInfo;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -15,6 +16,9 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.ListView;
 
 import java.util.ArrayList;
@@ -27,8 +31,9 @@ import java.util.Map;
 
 public class MainActivity extends ActionBarActivity {
 
-    private SharedPreferences pref;
+    static public SharedPreferences pref;
     private Handler handler = new Handler();
+    private PlaceholderFragment mFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,8 +43,9 @@ public class MainActivity extends ActionBarActivity {
 
         setContentView(R.layout.activity_main);
         if (savedInstanceState == null) {
+            mFragment = new PlaceholderFragment();
             getSupportFragmentManager().beginTransaction()
-                    .add(R.id.container, new PlaceholderFragment())
+                    .add(R.id.container, mFragment)
                     .commit();
         }
     }
@@ -69,6 +75,15 @@ public class MainActivity extends ActionBarActivity {
             });
             return true;
         }
+        else if(id == R.id.action_show_system_app) {
+
+            boolean value = !pref.getBoolean(Common.KEY_SHOW_SYSTEM_APP, false);
+
+            pref.edit()
+                .putBoolean(Common.KEY_SHOW_SYSTEM_APP, value)
+                .commit();
+            mFragment.refresh(value);
+        }
 
         return super.onOptionsItemSelected(item);
     }
@@ -87,27 +102,38 @@ public class MainActivity extends ActionBarActivity {
     /**
      * A placeholder fragment containing a simple view.
      */
-    public static class PlaceholderFragment extends Fragment {
+    public static class PlaceholderFragment extends Fragment
+                                            implements AdapterView.OnItemClickListener {
 
         private ListView listView;
-        private CheckBoxAdapter mAdapter;
+        private MainAdapter mAdapter;
+        private LayoutInflater mInflater;
+
 
         public PlaceholderFragment() {
+        }
+
+        private void refresh(boolean showSystemApp) {
+            mAdapter = new MainAdapter(getActivity(), getAppList(showSystemApp));
+            listView.setAdapter(mAdapter);
         }
 
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 
+            mInflater = inflater;
+
             View rootView = inflater.inflate(R.layout.fragment_main, container, false);
 
             listView = (ListView) rootView.findViewById(R.id.mListView);
-            mAdapter = new CheckBoxAdapter(getActivity(), getAppList());
-            listView.setAdapter(mAdapter);
+            listView.setOnItemClickListener(this);
+
+            refresh(pref.getBoolean(Common.KEY_SHOW_SYSTEM_APP, false));
 
             return rootView;
         }
 
-        private List<Map<String, Object>> getAppList() {
+        private List<Map<String, Object>> getAppList(boolean showSystemApps) {
 
             Context activity = getActivity();
 
@@ -118,7 +144,7 @@ public class MainActivity extends ActionBarActivity {
             List<Map<String, Object>> itemList = new ArrayList<>();
             for(ApplicationInfo info : apps) {
 
-                if((info.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
+                if(showSystemApps || (info.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
 
                     Map<String, Object> map = new HashMap<>();
 
@@ -140,6 +166,36 @@ public class MainActivity extends ActionBarActivity {
             });
 
             return itemList;
+        }
+
+        @Override
+        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+            final String pkgName = mAdapter.getKey(position);
+
+            View subSettings = mInflater.inflate(R.layout.subsettings, null);
+            CheckBox ckbHideFromSystem = (CheckBox) subSettings.findViewById(R.id.hide_from_system);
+            ListView sub_listView = (ListView) subSettings.findViewById(R.id.subsettings_listview);
+            CheckBoxAdapter sub_adapter = new CheckBoxAdapter(getActivity(), getAppList(false), pkgName);
+            sub_listView.setAdapter(sub_adapter);
+
+            final String pref_key = pkgName + Common.KEY_HIDE_FROM_SYSTEM;
+            ckbHideFromSystem.setChecked(pref.getBoolean(pref_key, false));
+            ckbHideFromSystem.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+
+                    pref.edit()
+                         .putBoolean(pref_key, isChecked)
+                         .commit();
+                }
+            });
+
+            new AlertDialog.Builder(getActivity())
+                    .setTitle(R.string.title_hide_app)
+                    .setView(subSettings)
+                    .show();
+
         }
     }
 }
