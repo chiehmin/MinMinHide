@@ -1,0 +1,7 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="tw.fatminmin.xposed.minminhide.MainActivity">
+    <item android:id="@+id/action_restart_launcher" android:title="@string/action_restart_launcher"
+        android:orderInCategory="100" app:showAsAction="ifRoom" />
+</menu>
